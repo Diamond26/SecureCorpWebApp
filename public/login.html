@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - SecureCorp Ticketing</title>
-    <link rel="stylesheet" href="template/css/login.css">
+    <link rel="stylesheet" href="template/css/style.css">
 </head>
 <body>
     <div class="login-container">
@@ -14,7 +14,7 @@
                 <div class="lock-body"></div>
             </div>
             <h1>SECURECORP</h1>
-            <p>Ticketing System</p>
+            <p style="color: var(--text-muted);"></p>
         </div>
 
         <div id="errorMessage" class="error-message"></div>
@@ -34,13 +34,12 @@
                 </div>
             </div>
 
-            <button type="submit" class="btn btn-primary" id="loginBtn">Accedi</button>
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 10px;" id="loginBtn">Accedi</button>
         </form>
 
-        <div class="info-message">
-            <h3>Informazioni</h3>
-            La creazione di nuovi account e riservata agli amministratori.<br>
-            Per richiedere un accesso, contatta l'amministrazione di sistema.
+        <div class="info-message" style="margin-top: 2rem; font-size: 0.85rem; color: var(--text-muted); border-top: 1px solid var(--glass-border); padding-top: 1rem;">
+            La registrazione dei nuovi utenti è gestita esclusivamente dagli amministratori.<br>
+            <br> 
         </div>
     </div>
 
@@ -52,25 +51,27 @@
             e.preventDefault(); hideError();
             const username = document.getElementById('username').value.trim(), password = document.getElementById('password').value, loginBtn = document.getElementById('loginBtn');
             if (!username || !password) { showError('Inserisci username e password'); return; }
-            loginBtn.classList.add('loading'); loginBtn.disabled = true;
+            
+            loginBtn.classList.add('loading'); loginBtn.disabled = true; loginBtn.textContent = 'Verifica in corso...';
+            
             try {
                 const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
                 const d = await r.json();
+                
                 if (r.ok) { 
                     sessionStorage.setItem('accessToken', d.accessToken); 
                     sessionStorage.setItem('refreshToken', d.refreshToken); 
                     sessionStorage.setItem('user', JSON.stringify(d.user)); 
-                    loginBtn.textContent = 'Accesso effettuato!'; 
-                    loginBtn.classList.remove('loading'); 
-                    const lockIcon = document.getElementById('lockIcon');
-                    if (lockIcon) lockIcon.classList.add('unlocking');
-                    setTimeout(() => { window.location.href = '/index.html'; }, 900); 
+                    
+                    loginBtn.textContent = 'Accesso Consentito'; 
+                    // Questa classe fa scattare l'animazione CSS
+                    document.getElementById('lockIcon').classList.add('unlocking');
+                    
+                    setTimeout(() => { window.location.href = '/index.html'; }, 800); 
                 } 
-                else { loginBtn.classList.remove('loading'); loginBtn.disabled = false; showError('Errore: ' + (d.error || 'Errore durante il login')); }
-            } catch (e) { console.error(e); loginBtn.classList.remove('loading'); loginBtn.disabled = false; showError('Errore di connessione al server'); }
+                else { loginBtn.textContent = 'Accedi'; loginBtn.disabled = false; showError('Errore: ' + (d.error || 'Credenziali non valide')); }
+            } catch (e) { console.error(e); loginBtn.textContent = 'Accedi'; loginBtn.disabled = false; showError('Errore di connessione al server'); }
         });
-
-        document.querySelectorAll('input').forEach(input => { input.addEventListener('focus', function() { this.parentElement.parentElement.querySelector('label').style.color = '#f2d675'; }); input.addEventListener('blur', function() { this.parentElement.parentElement.querySelector('label').style.color = '#d4af37'; }); });
     </script>
 </body>
 </html>

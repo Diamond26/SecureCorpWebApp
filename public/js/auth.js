@@ -1,5 +1,3 @@
-// auth.js - Authentication Management
-
 class AuthManager {
     constructor() {
         this.accessToken = sessionStorage.getItem('accessToken');
@@ -76,5 +74,4 @@ class AuthManager {
     }
 }
 
-// Global instance
 const auth = new AuthManager();
