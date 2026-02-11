@@ -1,0 +1,61 @@
+<title>Dettaglio Ticket - SecureCorp</title>
+<nav class="navbar">
+<div class="navbar-brand">SECURECORP</div>
+<div><a href="/dashboard.html" class="btn btn-secondary">Dashboard</a></div>
+</nav>
+<div class="container">
+<div id="errorMessage" class="error-message"></div>
+<div id="successMessage" class="success-message"></div>
+<div id="ticketContent" class="loading">Caricamento ticket...</div>
+</div>
+<script>
+let accessToken = sessionStorage.getItem('accessToken');
+const user = JSON.parse(sessionStorage.getItem('user') || '{}'), ticketId = new URLSearchParams(window.location.search).get('id');
+if (!accessToken || !user.id) window.location.href = '/login.html';
+if (!ticketId) window.location.href = '/dashboard.html';
+
+const showError = m => { document.getElementById('errorMessage').textContent = m; document.getElementById('errorMessage').style.display = 'flex'; document.getElementById('successMessage').style.display = 'none'; window.scrollTo(0,0); };
+const showSuccess = m => { document.getElementById('successMessage').textContent = m; document.getElementById('successMessage').style.display = 'flex'; document.getElementById('errorMessage').style.display = 'none'; window.scrollTo(0,0); };
+const formatDate = d => new Date(d).toLocaleDateString('it-IT', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+async function refreshToken() { const rt = sessionStorage.getItem('refreshToken'); if (!rt) return false; try { const r = await fetch('/api/auth/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken: rt }) }); if (r.ok) { const d = await r.json(); accessToken = d.accessToken; sessionStorage.setItem('accessToken', d.accessToken); return true; } } catch (e) { console.error(e); } return false; }
+
+async function loadTicket() { try { const r = await fetch(`/api/tickets/${ticketId}`, { headers: { 'Authorization': `Bearer ${accessToken}` } }); if (r.status === 401 || r.status === 403) { const ref = await refreshToken(); if (ref) return loadTicket(); else { window.location.href = '/login.html'; return; } } if (r.status === 404) { showError('Ticket non trovato'); return; } if (!r.ok) { const d = await r.json(); showError(d.error || 'Errore'); return; } renderTicket(await r.json()); } catch (e) { console.error(e); showError('Errore di connessione'); } }
+
+function renderTicket(t) {
+  const c = document.getElementById('ticketContent'); c.innerHTML = ''; c.classList.remove('loading');
+  const card = document.createElement('div'); card.className = 'card';
+  const header = document.createElement('div'); header.className = 'ticket-header';
+  const titleSec = document.createElement('div'); titleSec.className = 'ticket-title';
+  const titleRow = document.createElement('div'); titleRow.className = 'title-row';
+  const h1 = document.createElement('h1'); h1.textContent = t.title;
+  
+  const infoGrid = document.createElement('div'); infoGrid.className = 'info-grid';
+  const creatorItem = document.createElement('div'); creatorItem.className = 'info-item'; const creatorLabel = document.createElement('div'); creatorLabel.className = 'info-label'; creatorLabel.textContent = 'Creatore'; const creatorValue = document.createElement('div'); creatorValue.className = 'info-value'; creatorValue.textContent = t.creator || 'Non disponibile'; creatorItem.appendChild(creatorLabel); creatorItem.appendChild(creatorValue);
+  const typeItem = document.createElement('div'); typeItem.className = 'info-item'; const typeLabel = document.createElement('div'); typeLabel.className = 'info-label'; typeLabel.textContent = 'Tipo ticket'; const typeValue = document.createElement('div'); typeValue.className = 'info-value'; typeValue.textContent = t.ticket_type_desc; typeItem.appendChild(typeLabel); typeItem.appendChild(typeValue);
+  const dateItem = document.createElement('div'); dateItem.className = 'info-item'; const dateLabel = document.createElement('div'); dateLabel.className = 'info-label'; dateLabel.textContent = 'Creato il'; const dateValue = document.createElement('div'); dateValue.className = 'info-value'; dateValue.textContent = formatDate(t.created_at); dateItem.appendChild(dateLabel); dateItem.appendChild(dateValue);
+  infoGrid.appendChild(creatorItem); infoGrid.appendChild(typeItem); infoGrid.appendChild(dateItem); titleSec.appendChild(infoGrid);
+  const statusSpan = document.createElement('span'); statusSpan.className = `ticket-status status-${t.status} status-inline`; statusSpan.textContent = ` ${t.status_desc}`;
+  titleRow.appendChild(h1); titleRow.appendChild(statusSpan); titleSec.appendChild(titleRow);
+  header.appendChild(titleSec);
+  const descSec = document.createElement('div'); const descTitle = document.createElement('div'); descTitle.className = 'section-title'; descTitle.textContent = 'Descrizione'; const descContent = document.createElement('div'); descContent.className = 'ticket-description'; descContent.textContent = t.description; descSec.appendChild(descTitle); descSec.appendChild(descContent);
+  card.appendChild(header); card.appendChild(descSec);
+  
+  if (t.user_id === user.id && t.status === 'OPEN') { const actionButtons = document.createElement('div'); actionButtons.className = 'action-buttons'; const editBtn = document.createElement('button'); editBtn.className = 'btn btn-primary'; editBtn.textContent = 'Modifica Ticket'; editBtn.onclick = () => document.getElementById('editForm').style.display = 'block'; actionButtons.appendChild(editBtn); card.appendChild(actionButtons); }
+  
+  c.appendChild(card);
+  const editCard = document.createElement('div'); editCard.className = 'card edit-form'; editCard.id = 'editForm';
+  const formTitle = document.createElement('div'); formTitle.className = 'section-title'; formTitle.textContent = 'Modifica Ticket';
+  const form = document.createElement('form'); form.id = 'updateForm';
+  const titleGroup = document.createElement('div'); titleGroup.className = 'form-group'; const titleLabel = document.createElement('label'); titleLabel.textContent = 'Titolo *'; const titleInput = document.createElement('input'); titleInput.type = 'text'; titleInput.id = 'editTitle'; titleInput.value = t.title; titleInput.maxLength = 120; titleInput.required = true; titleGroup.appendChild(titleLabel); titleGroup.appendChild(titleInput);
+  const descGroup = document.createElement('div'); descGroup.className = 'form-group'; const descLabel = document.createElement('label'); descLabel.textContent = 'Descrizione *'; const descTextarea = document.createElement('textarea'); descTextarea.id = 'editDescription'; descTextarea.value = t.description; descTextarea.maxLength = 2000; descTextarea.required = true; descGroup.appendChild(descLabel); descGroup.appendChild(descTextarea);
+  const actions = document.createElement('div'); actions.className = 'form-actions'; const saveBtn = document.createElement('button'); saveBtn.type = 'submit'; saveBtn.className = 'btn btn-primary'; saveBtn.textContent = 'Salva'; const cancelBtn = document.createElement('button'); cancelBtn.type = 'button'; cancelBtn.className = 'btn btn-secondary'; cancelBtn.textContent = 'Annulla'; cancelBtn.onclick = () => document.getElementById('editForm').style.display = 'none'; actions.appendChild(saveBtn); actions.appendChild(cancelBtn);
+  form.appendChild(titleGroup); form.appendChild(descGroup); form.appendChild(actions);
+  form.onsubmit = async (e) => { e.preventDefault(); const title = titleInput.value.trim(), description = descTextarea.value.trim(); if (!title || !description) { showError('Campi obbligatori mancanti'); return; } try { const r = await fetch(`/api/tickets/${t.id}`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ title, description }) }); const d = await r.json(); if (r.ok) { showSuccess('Ticket aggiornato con successo!'); document.getElementById('editForm').style.display = 'none'; setTimeout(() => loadTicket(), 1000); } else showError('Errore: ' + (d.error || 'Errore durante l\'aggiornamento')); } catch (e) { console.error(e); showError('Errore di connessione al server'); } };
+  editCard.appendChild(formTitle); editCard.appendChild(form);
+  c.appendChild(editCard);
+}
+
+loadTicket();
+</script>
+

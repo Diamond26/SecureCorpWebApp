@@ -1,0 +1,34 @@
+    <title>Dashboard - SecureCorp Ticketing</title>
+    <nav class="navbar">
+        <div class="navbar-brand">SECURECORP</div>
+        <div class="navbar-user">
+            <div class="user-info">
+                <div class="username" id="username"></div>
+                <div class="role">Utente</div>
+            </div>
+            <button class="btn btn-danger" id="logoutBtn">Logout</button>
+        </div>
+    </nav>
+    <div class="container">
+        <div class="header">
+            <h1>I Miei Ticket</h1>
+            <a href="/new-ticket.html" class="btn btn-success">+ Nuovo Ticket</a>
+        </div>
+        <div id="ticketsContainer" class="loading">Caricamento ticket...</div>
+    </div>
+    <script>
+        let accessToken = sessionStorage.getItem('accessToken');
+        const user = JSON.parse(sessionStorage.getItem('user') || '{}');
+        if (!accessToken || !user.id) window.location.href = '/login.html';
+        if (user.user_type === 'ADMIN') window.location.href = '/admin.html';
+        document.getElementById('username').textContent = user.username;
+        
+        const formatDate = d => new Date(d).toLocaleDateString('it-IT', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const createTicketCard = t => { const card = document.createElement('div'); card.className = 'ticket-card'; card.onclick = () => window.location.href = `/ticket-detail.html?id=${t.id}`; const header = document.createElement('div'); header.className = 'ticket-header'; const title = document.createElement('div'); title.className = 'ticket-title'; title.textContent = t.title; const status = document.createElement('span'); status.className = `ticket-status status-${t.status}`; status.textContent = t.status_desc; header.appendChild(title); header.appendChild(status); const desc = document.createElement('div'); desc.className = 'ticket-description'; desc.textContent = t.description; const meta = document.createElement('div'); meta.className = 'ticket-meta'; const type = document.createElement('span'); type.className = 'ticket-type'; type.textContent = t.ticket_type_desc; const date = document.createElement('span'); date.className = 'ticket-date'; date.textContent = formatDate(t.created_at); meta.appendChild(type); meta.appendChild(date); card.appendChild(header); card.appendChild(desc); card.appendChild(meta); return card; };
+        
+        async function refreshToken() { const rt = sessionStorage.getItem('refreshToken'); if (!rt) return false; try { const r = await fetch('/api/auth/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken: rt }) }); if (r.ok) { const d = await r.json(); accessToken = d.accessToken; sessionStorage.setItem('accessToken', d.accessToken); return true; } } catch (e) { console.error(e); } return false; }
+        async function loadTickets() { try { const r = await fetch('/api/tickets', { headers: { 'Authorization': `Bearer ${accessToken}` } }); if (r.status === 401 || r.status === 403) { const ref = await refreshToken(); if (ref) return loadTickets(); else { window.location.href = '/login.html'; return; } } const tickets = await r.json(); const c = document.getElementById('ticketsContainer'); if (tickets.length === 0) { c.innerHTML = ''; const es = document.createElement('div'); es.className = 'empty-state'; const i = document.createElement('div'); i.className = 'empty-state-icon'; i.textContent = '📋'; const h = document.createElement('h2'); h.textContent = 'Nessun ticket trovato'; const p = document.createElement('p'); p.textContent = 'Crea il tuo primo ticket per iniziare'; const b = document.createElement('a'); b.href = '/new-ticket.html'; b.className = 'btn btn-primary'; b.textContent = '+ Crea Ticket'; es.appendChild(i); es.appendChild(h); es.appendChild(p); es.appendChild(b); c.appendChild(es); } else { c.innerHTML = ''; c.className = 'tickets-grid'; tickets.forEach(t => c.appendChild(createTicketCard(t))); } } catch (e) { console.error(e); document.getElementById('ticketsContainer').textContent = '⚠️ Errore nel caricamento dei ticket'; } }
+        
+        document.getElementById('logoutBtn').addEventListener('click', async () => { const rt = sessionStorage.getItem('refreshToken'); try { await fetch('/api/auth/logout', { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken: rt }) }); } catch (e) { console.error(e); } sessionStorage.clear(); window.location.href = '/login.html'; });
+        loadTickets();
+    </script>

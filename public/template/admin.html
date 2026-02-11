@@ -1,0 +1,254 @@
+<title>Admin Dashboard - SecureCorp</title>
+<nav class="navbar">
+<div class="navbar-brand">SECURECORP ADMIN PANEL</div>
+<div class="navbar-user">
+<div class="user-info">
+<div class="username" id="username"></div>
+<div class="role">Amministratore</div>
+</div>
+<button class="btn btn-danger" id="logoutBtn">Logout</button>
+</div>
+</nav>
+
+<div class="container">
+<div class="header">
+<h1>Dashboard Amministratore</h1>
+<div class="header-actions">
+<a href="/users.html" class="btn btn-info">Gestione Utenti</a>
+<button class="btn btn-success" id="newUserBtn">+ Nuovo Utente</button>
+</div>
+</div>
+
+<div id="errorMessage" class="error-message"></div>
+<div id="successMessage" class="success-message"></div>
+
+<div class="stats">
+<div class="stat-card">
+    <div class="stat-value" id="totalTickets">0</div>
+    <div class="stat-label">Ticket Totali</div>
+</div>
+<div class="stat-card">
+    <div class="stat-value" id="openTickets">0</div>
+    <div class="stat-label">Aperti</div>
+</div>
+<div class="stat-card">
+    <div class="stat-value" id="inProgressTickets">0</div>
+    <div class="stat-label">In Lavorazione</div>
+</div>
+<div class="stat-card">
+    <div class="stat-value" id="closedTickets">0</div>
+    <div class="stat-label">Chiusi</div>
+</div>
+</div>
+
+<div class="table-container">
+<table>
+<thead>
+    <tr>
+        <th>ID</th>
+        <th>Titolo</th>
+        <th class="type-header">Tipo</th>
+        <th>Creatore</th>
+        <th>Status</th>
+        <th>Data</th>
+        <th class="actions-header">Azioni</th>
+    </tr>
+</thead>
+<tbody id="ticketsTable">
+    <tr>
+        <td colspan="7" class="loading">Caricamento ticket...</td>
+    </tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<!-- Modal Nuovo Utente -->
+<div id="newUserModal" class="modal">
+<div class="modal-content">
+<div class="modal-header">
+    <h2>Registra Nuovo Utente</h2>
+    <button class="close-modal" onclick="closeNewUserModal()">×</button>
+</div>
+<div id="modalError" class="error-message"></div>
+<div id="modalSuccess" class="success-message"></div>
+<form id="newUserForm">
+    <div class="form-group">
+        <div class="input-wrapper">
+            <label for="newUsername">Username *</label>
+            <input type="text" id="newUsername" required minlength="3" maxlength="50">
+        </div>
+    </div>
+    <div class="form-group">
+        <div class="input-wrapper">
+            <label for="newPassword">Password *</label>
+            <input type="password" id="newPassword" required minlength="6">
+        </div>
+    </div>
+    <div class="form-group">
+        <div class="input-wrapper">
+            <label for="userType">Tipo Utente *</label>
+            <select id="userType" required>
+                <option value="USER">Utente</option>
+                <option value="ADMIN">Amministratore</option>
+            </select>
+        </div>
+    </div>
+    <button type="submit" class="btn btn-primary" style="width: 100%;">Crea Utente</button>
+</form>
+</div>
+</div>
+
+<!-- Modal Modifica Status -->
+<div id="statusModal" class="modal">
+<div class="modal-content">
+<div class="modal-header">
+    <h2>Modifica Status Ticket</h2>
+    <button class="close-modal" onclick="closeStatusModal()">×</button>
+</div>
+<div id="statusModalError" class="error-message"></div>
+<form id="statusForm">
+    <div class="form-group">
+        <div class="input-wrapper">
+            <label for="ticketStatus">Nuovo Status *</label>
+            <select id="ticketStatus" required>
+                <option value="OPEN">Aperto</option>
+                <option value="IN_PROGRESS">In Lavorazione</option>
+                <option value="CLOSED">Chiuso</option>
+            </select>
+        </div>
+    </div>
+    <button type="submit" class="btn btn-primary" style="width: 100%;">Aggiorna Status</button>
+</form>
+</div>
+</div>
+
+<script>
+let accessToken = sessionStorage.getItem('accessToken'), currentTicketId = null, statsAnimated = false;
+const user = JSON.parse(sessionStorage.getItem('user') || '{}');
+if (!accessToken || !user.id || user.user_type !== 'ADMIN') window.location.href = '/login.html';
+document.getElementById('username').textContent = user.username;
+
+const showError = m => { document.getElementById('errorMessage').textContent = m; document.getElementById('errorMessage').style.display = 'block'; document.getElementById('successMessage').style.display = 'none'; window.scrollTo({ top: 0, behavior: 'smooth' }); };
+const showSuccess = m => { document.getElementById('successMessage').textContent = m; document.getElementById('successMessage').style.display = 'block'; document.getElementById('errorMessage').style.display = 'none'; window.scrollTo({ top: 0, behavior: 'smooth' }); };
+
+async function refreshToken() { 
+  const rt = sessionStorage.getItem('refreshToken'); 
+  if (!rt) return false; 
+  try { 
+    const r = await fetch('/api/auth/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken: rt }) }); 
+    if (r.ok) { const d = await r.json(); accessToken = d.accessToken; sessionStorage.setItem('accessToken', d.accessToken); return true; } 
+  } catch (e) { console.error(e); } 
+  return false; 
+}
+
+const formatDate = d => new Date(d).toLocaleDateString('it-IT', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+async function loadTickets() {
+  try {
+    const r = await fetch('/api/tickets', { headers: { 'Authorization': `Bearer ${accessToken}` } });
+    if (r.status === 401 || r.status === 403) { const ref = await refreshToken(); if (ref) return loadTickets(); else { window.location.href = '/login.html'; return; } }
+    const tickets = await r.json();
+    const totalTickets = tickets.length;
+    const openTickets = tickets.filter(x => x.status === 'OPEN').length;
+    const inProgressTickets = tickets.filter(x => x.status === 'IN_PROGRESS').length;
+    const closedTickets = tickets.filter(x => x.status === 'CLOSED').length;
+    if (!statsAnimated) {
+      animateCount(document.getElementById('totalTickets'), totalTickets);
+      animateCount(document.getElementById('openTickets'), openTickets);
+      animateCount(document.getElementById('inProgressTickets'), inProgressTickets);
+      animateCount(document.getElementById('closedTickets'), closedTickets);
+      statsAnimated = true;
+    } else {
+      document.getElementById('totalTickets').textContent = totalTickets;
+      document.getElementById('openTickets').textContent = openTickets;
+      document.getElementById('inProgressTickets').textContent = inProgressTickets;
+      document.getElementById('closedTickets').textContent = closedTickets;
+    }
+    renderTicketsTable(tickets);
+  } catch (e) { console.error(e); showError('Errore nel caricamento dei ticket'); }
+}
+
+function animateCount(el, value) {
+  const duration = 800;
+  const startTime = performance.now();
+  const step = (now) => {
+    const progress = Math.min((now - startTime) / duration, 1);
+    const current = Math.round(value * progress);
+    el.textContent = current;
+    if (progress < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+function renderTicketsTable(tickets) {
+  const tbody = document.getElementById('ticketsTable');
+  tbody.innerHTML = '';
+  if (tickets.length === 0) { const tr = document.createElement('tr'); const td = document.createElement('td'); td.colSpan = 7; td.className = 'empty-state'; td.innerHTML = '<h2>Nessun ticket presente</h2><p>I ticket creati appariranno qui</p>'; tr.appendChild(td); tbody.appendChild(tr); return; }
+  
+  tickets.forEach(ticket => {
+    const tr = document.createElement('tr');
+    const tdId = document.createElement('td'); tdId.textContent = '#' + ticket.id; tdId.style.fontWeight = '600'; tdId.style.color = '#d4af37'; tr.appendChild(tdId);
+    const tdTitle = document.createElement('td'); tdTitle.textContent = ticket.title; tdTitle.style.maxWidth = '300px'; tdTitle.style.fontWeight = '600'; tr.appendChild(tdTitle);
+    const tdType = document.createElement('td'); tdType.className = 'type-cell'; const typeSpan = document.createElement('span'); typeSpan.className = 'ticket-type'; typeSpan.textContent = ticket.ticket_type_desc; tdType.appendChild(typeSpan); tr.appendChild(tdType);
+    const tdCreator = document.createElement('td'); tdCreator.textContent = ticket.creator; tr.appendChild(tdCreator);
+    const tdStatus = document.createElement('td'); const statusSpan = document.createElement('span'); statusSpan.className = `ticket-status status-${ticket.status}`; statusSpan.textContent = ticket.status_desc; tdStatus.appendChild(statusSpan); tr.appendChild(tdStatus);
+    const tdDate = document.createElement('td'); tdDate.textContent = formatDate(ticket.created_at); tdDate.style.whiteSpace = 'nowrap'; tr.appendChild(tdDate);
+    const tdActions = document.createElement('td'); tdActions.className = 'actions-cell';
+    const actionsGroup = document.createElement('div'); actionsGroup.className = 'actions-group';
+    const viewBtn = document.createElement('button'); viewBtn.className = 'btn btn-primary btn-sm'; viewBtn.textContent = 'Vedi'; viewBtn.onclick = () => window.location.href = `/ticket-detail.html?id=${ticket.id}`; actionsGroup.appendChild(viewBtn);
+    const statusBtn = document.createElement('button'); statusBtn.className = 'btn btn-warning btn-sm'; statusBtn.textContent = 'Status'; statusBtn.onclick = () => { currentTicketId = ticket.id; document.getElementById('ticketStatus').value = ticket.status; document.getElementById('statusModal').classList.add('active'); document.getElementById('statusModalError').style.display = 'none'; }; actionsGroup.appendChild(statusBtn);
+    tdActions.appendChild(actionsGroup);
+    tr.appendChild(tdActions);
+    tbody.appendChild(tr);
+  });
+}
+
+document.getElementById('newUserBtn').addEventListener('click', () => { document.getElementById('newUserModal').classList.add('active'); document.getElementById('newUserForm').reset(); document.getElementById('modalError').style.display = 'none'; document.getElementById('modalSuccess').style.display = 'none'; });
+
+document.getElementById('newUserForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  document.getElementById('modalError').style.display = 'none'; document.getElementById('modalSuccess').style.display = 'none';
+  const username = document.getElementById('newUsername').value.trim(), password = document.getElementById('newPassword').value, user_type = document.getElementById('userType').value;
+  try {
+    const r = await fetch('/api/auth/register', { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password, user_type }) });
+    const d = await r.json();
+    if (r.ok) { document.getElementById('modalSuccess').textContent = 'Utente creato con successo!'; document.getElementById('modalSuccess').style.display = 'block'; document.getElementById('newUserForm').reset(); setTimeout(() => document.getElementById('newUserModal').classList.remove('active'), 2000); } 
+    else { document.getElementById('modalError').textContent = 'Errore: ' + (d.error || 'Errore durante la creazione'); document.getElementById('modalError').style.display = 'block'; }
+  } catch (e) { console.error(e); document.getElementById('modalError').textContent = 'Errore di connessione al server'; document.getElementById('modalError').style.display = 'block'; }
+});
+
+document.getElementById('statusForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); document.getElementById('statusModalError').style.display = 'none';
+  const status = document.getElementById('ticketStatus').value;
+  try {
+    const r = await fetch(`/api/tickets/${currentTicketId}/status`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
+    const d = await r.json();
+    if (r.ok) { showSuccess('Status aggiornato con successo!'); document.getElementById('statusModal').classList.remove('active'); currentTicketId = null; loadTickets(); } 
+    else { document.getElementById('statusModalError').textContent = 'Errore: ' + (d.error || 'Errore durante l\'aggiornamento'); document.getElementById('statusModalError').style.display = 'block'; }
+  } catch (e) { console.error(e); document.getElementById('statusModalError').textContent = 'Errore di connessione al server'; document.getElementById('statusModalError').style.display = 'block'; }
+});
+
+document.getElementById('logoutBtn').addEventListener('click', async () => { 
+  const rt = sessionStorage.getItem('refreshToken'); 
+  try { await fetch('/api/auth/logout', { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken: rt }) }); } 
+  catch (e) { console.error(e); } 
+  sessionStorage.clear(); 
+  window.location.href = '/login.html'; 
+});
+
+function closeNewUserModal() {
+  document.getElementById('newUserModal').classList.remove('active');
+  document.getElementById('newUserForm').reset();
+  document.getElementById('modalError').style.display = 'none';
+  document.getElementById('modalSuccess').style.display = 'none';
+}
+
+function closeStatusModal() {
+  document.getElementById('statusModal').classList.remove('active');
+  document.getElementById('statusForm').reset();
+  document.getElementById('statusModalError').style.display = 'none';
+}
+
+loadTickets();
+</script>

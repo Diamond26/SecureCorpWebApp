@@ -1,0 +1,75 @@
+    <title>Nuovo Ticket - SecureCorp</title>
+    <nav class="navbar">
+        <div class="navbar-brand">SECURECORP</div>
+        <div><a href="/dashboard.html" class="btn btn-secondary">← Dashboard</a></div>
+    </nav>
+    <div class="container">
+        <div class="card">
+            <h1>Nuovo Ticket</h1>
+            <div id="errorMessage" class="error-message"></div>
+            <div id="successMessage" class="success-message"></div>
+            <form id="ticketForm">
+                <div class="form-group">
+                    <div class="input-wrapper">
+                        <label for="ticketType">Tipo di Ticket *</label>
+                        <select id="ticketType" required>
+                            <option value="">Seleziona un tipo...</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="input-wrapper">
+                        <label for="title">Titolo *</label>
+                        <input type="text" id="title" required maxlength="120" placeholder="Inserisci un titolo descrittivo">
+                        <div class="char-counter"><span id="titleCounter">0</span> / 120</div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="input-wrapper">
+                        <label for="description">Descrizione *</label>
+                        <textarea id="description" required maxlength="2000" placeholder="Descrivi il problema o la richiesta in dettaglio..."></textarea>
+                        <div class="char-counter"><span id="descCounter">0</span> / 2000</div>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary" id="submitBtn">✓ Crea Ticket</button>
+                    <a href="/dashboard.html" class="btn btn-secondary">✕ Annulla</a>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script>
+        let accessToken = sessionStorage.getItem('accessToken');
+        const user = JSON.parse(sessionStorage.getItem('user') || '{}');
+        if (!accessToken || !user.id) window.location.href = '/login.html';
+        
+        const showError = m => { document.getElementById('errorMessage').textContent = m; document.getElementById('errorMessage').style.display = 'block'; document.getElementById('successMessage').style.display = 'none'; window.scrollTo({ top: 0, behavior: 'smooth' }); };
+        const showSuccess = m => { document.getElementById('successMessage').textContent = m; document.getElementById('successMessage').style.display = 'block'; document.getElementById('errorMessage').style.display = 'none'; window.scrollTo({ top: 0, behavior: 'smooth' }); };
+        const hideMessages = () => { document.getElementById('errorMessage').style.display = 'none'; document.getElementById('successMessage').style.display = 'none'; };
+
+        async function loadTicketTypes() { try { const r = await fetch('/api/tickets/meta/types', { headers: { 'Authorization': `Bearer ${accessToken}` } }); if (r.ok) { const types = await r.json(); const select = document.getElementById('ticketType'); types.forEach(t => { const o = document.createElement('option'); o.value = t.code; o.textContent = t.description; select.appendChild(o); }); } } catch (e) { console.error(e); } }
+        
+        const titleInput = document.getElementById('title'), descInput = document.getElementById('description'), titleCounter = document.getElementById('titleCounter'), descCounter = document.getElementById('descCounter');
+        titleInput.addEventListener('input', () => { const l = titleInput.value.length; titleCounter.textContent = l; const c = titleCounter.parentElement; c.classList.remove('warning', 'error'); if (l > 100) c.classList.add('warning'); if (l > 115) c.classList.add('error'); });
+        descInput.addEventListener('input', () => { const l = descInput.value.length; descCounter.textContent = l; const c = descCounter.parentElement; c.classList.remove('warning', 'error'); if (l > 1800) c.classList.add('warning'); if (l > 1950) c.classList.add('error'); });
+        
+        async function refreshToken() { const rt = sessionStorage.getItem('refreshToken'); if (!rt) return false; try { const r = await fetch('/api/auth/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken: rt }) }); if (r.ok) { const d = await r.json(); accessToken = d.accessToken; sessionStorage.setItem('accessToken', d.accessToken); return true; } } catch (e) { console.error(e); } return false; }
+        
+        document.getElementById('ticketForm').addEventListener('submit', async (e) => {
+            e.preventDefault(); hideMessages();
+            const submitBtn = document.getElementById('submitBtn'), ticketType = document.getElementById('ticketType').value, title = titleInput.value.trim(), description = descInput.value.trim();
+            if (!ticketType || !title || !description) { showError('⚠️ Tutti i campi sono obbligatori'); return; }
+            if (title.length > 120) { showError('⚠️ Il titolo è troppo lungo'); return; }
+            if (description.length > 2000) { showError('⚠️ La descrizione è troppo lunga'); return; }
+            submitBtn.classList.add('loading'); submitBtn.disabled = true;
+            try {
+                const r = await fetch('/api/tickets', { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ ticket_type: ticketType, title, description }) });
+                const d = await r.json();
+                if (r.status === 401 || r.status === 403) { const ref = await refreshToken(); if (ref) { submitBtn.classList.remove('loading'); submitBtn.disabled = false; return document.getElementById('ticketForm').dispatchEvent(new Event('submit')); } else { window.location.href = '/login.html'; return; } }
+                if (r.ok) { showSuccess('✓ Ticket creato con successo!'); document.getElementById('ticketForm').reset(); titleCounter.textContent = '0'; descCounter.textContent = '0'; submitBtn.textContent = '✓ Creato!'; submitBtn.classList.remove('loading'); setTimeout(() => { window.location.href = '/dashboard.html'; }, 1500); } 
+                else { submitBtn.classList.remove('loading'); submitBtn.disabled = false; showError('✗ ' + (d.error || 'Errore durante la creazione')); }
+            } catch (e) { console.error(e); submitBtn.classList.remove('loading'); submitBtn.disabled = false; showError('✗ Errore di connessione al server'); }
+        });
+        
+        loadTicketTypes();
+    </script>

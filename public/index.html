@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SecureCorp - Ticketing System</title>
+
+  <!-- CSS Files -->
+  <link rel="stylesheet" href="template/css/dashboard.css">
+  <link rel="stylesheet" href="template/css/admin.css">
+  <link rel="stylesheet" href="template/css/new-ticket.css">
+  <link rel="stylesheet" href="template/css/ticket-detail.css">
+  <link rel="stylesheet" href="template/css/users.css">
+</head>
+
+<body>
+  <!-- Navigation Bar -->
+  <nav class="navbar" id="mainNavbar">
+    <div class="d-flex">
+      <div class="navbar-brand">SECURECORP</div>
+      <div class="navbar-user">
+        <div class="user-info">
+          <div class="username" id="navUsername"></div>
+          <div class="role" id="navRole">Utente</div>
+        </div>
+      </div>
+    </div>
+    <div class="d-flex">
+      <div><a href="index.html" class="btn btn-secondary">Dashboard</a></div>
+      <button class="btn btn-danger" id="logoutBtn">Logout</button>
+    </div>
+
+  </nav>
+
+  <!-- Main Content Container -->
+  <div id="app-content"></div>
+
+  <!-- Scripts -->
+  <script src="js/auth.js"></script>
+  <script src="js/router.js"></script>
+  <script src="js/app.js"></script>
+</body>
+
+</html>

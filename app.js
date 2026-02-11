@@ -1,0 +1,13 @@
+const express = require('express'), path = require('path'), helmet = require('helmet'), cors = require('cors'), authRoutes = require('./routes/auth'), ticketRoutes = require('./routes/tickets');
+require('dotenv').config();
+const app = express(), PORT = process.env.PORT || 3000;
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/api/auth', authRoutes);
+app.use('/api/tickets', ticketRoutes);
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
+app.use((err, req, res, next) => { console.error('Error:', err); res.status(500).json({ error: 'Errore interno del server' }); });
+app.listen(PORT, () => console.log(`Server in esecuzione su http://localhost:${PORT}`));
